@@ -1,5 +1,7 @@
 # Transcrib Electron
 
+Audio transcription / Транскрибация аудио
+
 Версия приложения Transcrib на Electron (JavaScript/TypeScript)
 
 ## Требования
@@ -29,7 +31,7 @@ npm run build
 
 ## Структура проекта
 
-```
+```text
 transcrib-electron/
 ├── package.json      # Зависимости и скрипты
 ├── src/
