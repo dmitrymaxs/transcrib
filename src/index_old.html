@@ -352,18 +352,10 @@
             <select id="language">
                 <option value="auto" selected>Автоопределение</option>
                 <option value="ru">Русский</option>
-                <option value="uk">Українська</option>
                 <option value="en">English</option>
                 <option value="de">Deutsch</option>
                 <option value="fr">Français</option>
                 <option value="es">Español</option>
-                <option value="it">Italiano</option>
-                <option value="pt">Português</option>
-                <option value="pl">Polski</option>
-                <option value="tr">Türkçe</option>
-                <option value="ja">日本語</option>
-                <option value="ko">한국어</option>
-                <option value="zh">中文</option>
             </select>
             
             <div class="checkbox-group">
@@ -377,8 +369,8 @@
                 </label>
             </div>
             
-            <button type="button" class="primary" onclick="startTranscription()">🚀 Транскрибировать</button>
-            <button type="button" onclick="clearAll()">📋 Очистить</button>
+            <button class="primary" onclick="startTranscription()">🚀 Транскрибировать</button>
+            <button onclick="clearAll()">📋 Очистить</button>
             
             <div class="status-bar" id="status">Готов к работе</div>
         </div>
@@ -386,8 +378,8 @@
         <!-- Правая панель -->
         <div class="right-panel">
             <div class="tabs">
-                <button class="tab active" onclick="switchTab('text', this)">📝 Текст с таймкодами</button>
-                <button class="tab" onclick="switchTab('segments', this)">📋 Сегменты</button>
+                <button class="tab active" onclick="switchTab('text')">📝 Текст с таймкодами</button>
+                <button class="tab" onclick="switchTab('segments')">📋 Сегменты</button>
             </div>
             
             <div class="content-area">

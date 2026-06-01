@@ -1,8 +1,104 @@
 const { app, BrowserWindow, ipcMain, dialog } = require('electron');
 const path = require('path');
+const fs = require('fs');
 const { spawn } = require('child_process');
 
-// Основное окно
+/** Корень Python-проекта Transcrib (родитель transcrib-electron) */
+const TRANSCRIB_ROOT = path.join(__dirname, '..', '..');
+const MAIN_PY = path.join(TRANSCRIB_ROOT, 'main.py');
+const JSON_STDOUT_MARKER = 'TRANSCRIB_RESULT:';
+
+const EXPORT_FORMATS = {
+    txt: { name: 'Текст (TXT)', ext: 'txt' },
+    json: { name: 'JSON', ext: 'json' },
+    srt: { name: 'Субтитры (SRT)', ext: 'srt' },
+    vtt: { name: 'Субтитры (VTT)', ext: 'vtt' },
+};
+
+function ensureExtension(filePath, ext) {
+    const expected = '.' + ext;
+    if (path.extname(filePath).toLowerCase() === expected) {
+        return filePath;
+    }
+    return filePath + expected;
+}
+
+function getPythonCandidates() {
+    if (process.platform === 'win32') {
+        return ['py', 'python', 'python3'];
+    }
+    return ['python3', 'python'];
+}
+
+async function runPython(args, onLog) {
+    const candidates = getPythonCandidates();
+    let lastError = null;
+
+    for (const cmd of candidates) {
+        const spawnArgs = cmd === 'py' ? ['-3', ...args] : args;
+
+        try {
+            const result = await new Promise((resolve, reject) => {
+                const child = spawn(cmd, spawnArgs, {
+                    cwd: TRANSCRIB_ROOT,
+                    windowsHide: true,
+                });
+
+                let stdout = '';
+                let stderr = '';
+
+                const emitLog = (text, stream) => {
+                    if (!text || !onLog) return;
+                    text.split(/\r?\n/).forEach((line) => {
+                        const trimmed = line.trim();
+                        if (trimmed) onLog(trimmed, stream);
+                    });
+                };
+
+                child.stdout.on('data', (data) => {
+                    const chunk = data.toString();
+                    stdout += chunk;
+                    emitLog(chunk, 'stdout');
+                });
+
+                child.stderr.on('data', (data) => {
+                    const chunk = data.toString();
+                    stderr += chunk;
+                    emitLog(chunk, 'stderr');
+                });
+
+                child.on('error', (err) => reject(err));
+
+                child.on('close', (code) => {
+                    resolve({ code, stdout, stderr, command: cmd });
+                });
+            });
+
+            return result;
+        } catch (err) {
+            lastError = err;
+        }
+    }
+
+    throw lastError || new Error('Python не найден. Установите Python 3 и добавьте в PATH.');
+}
+
+function parseTranscribJson(stdout) {
+    const markerIndex = stdout.indexOf(JSON_STDOUT_MARKER);
+    if (markerIndex >= 0) {
+        const jsonPart = stdout.slice(markerIndex + JSON_STDOUT_MARKER.length).trim();
+        return JSON.parse(jsonPart);
+    }
+
+    const start = stdout.indexOf('{');
+    const end = stdout.lastIndexOf('}');
+    if (start >= 0 && end > start) {
+        return JSON.parse(stdout.slice(start, end + 1));
+    }
+
+    throw new Error('Не удалось разобрать ответ Python (нет JSON в выводе)');
+}
+
 let mainWindow;
 
 function createWindow() {
@@ -13,10 +109,10 @@ function createWindow() {
         minHeight: 600,
         webPreferences: {
             nodeIntegration: true,
-            contextIsolation: false
+            contextIsolation: false,
         },
         backgroundColor: '#1e1e2e',
-        show: false
+        show: false,
     });
 
     mainWindow.loadFile('src/index.html');
@@ -46,97 +142,107 @@ app.on('window-all-closed', () => {
     }
 });
 
-// Выбор файла
 ipcMain.handle('select-file', async () => {
     const result = await dialog.showOpenDialog(mainWindow, {
         properties: ['openFile'],
         filters: [
-            { name: 'Audio/Video', extensions: ['mp3', 'wav', 'flac', 'm4a', 'aac', 'ogg', 'wma', 'mp4', 'avi', 'mkv', 'mov'] },
-            { name: 'All Files', extensions: ['*'] }
-        ]
+            {
+                name: 'Audio/Video',
+                extensions: ['mp3', 'wav', 'flac', 'm4a', 'aac', 'ogg', 'wma', 'mp4', 'avi', 'mkv', 'mov'],
+            },
+            { name: 'All Files', extensions: ['*'] },
+        ],
     });
     return result.filePaths[0] || null;
 });
 
-// Сохранение файла
-ipcMain.handle('save-file', async (event, { defaultName, filters }) => {
+ipcMain.handle('save-export', async (event, { defaultName, format, content }) => {
+    const config = EXPORT_FORMATS[format];
+    if (!config) {
+        return { ok: false, error: 'Неподдерживаемый формат' };
+    }
+
     const result = await dialog.showSaveDialog(mainWindow, {
         defaultPath: defaultName,
-        filters: filters
+        filters: [{ name: config.name, extensions: [config.ext] }],
     });
-    return result.filePath || null;
-});
 
-// Запись файла
-ipcMain.handle('write-file', async (event, { filePath, content }) => {
-    const fs = require('fs');
+    if (result.canceled || !result.filePath) {
+        return { ok: false, canceled: true };
+    }
+
+    const filePath = ensureExtension(result.filePath, config.ext);
     fs.writeFileSync(filePath, content, 'utf-8');
-    return true;
+    return { ok: true, filePath };
 });
 
-// Транскрибация через Python
-ipcMain.handle('transcribe', async (event, { filePath, model, language, timestamps }) => {
-    return new Promise((resolve, reject) => {
-        // Аргументы для Python скрипта
-        const args = [
-            path.join(__dirname, '..', '..', 'main.py'),
-            filePath,
-            '-m', model,
-            '--json-stdout'
-        ];
-        
-        if (language && language !== 'auto') {
-            args.push('-l', language);
+ipcMain.handle('check-environment', async () => {
+    const checks = {
+        python: false,
+        mainPy: fs.existsSync(MAIN_PY),
+        whisper: false,
+        ffmpeg: false,
+        transcribRoot: TRANSCRIB_ROOT,
+        messages: [],
+    };
+
+    if (!checks.mainPy) {
+        checks.messages.push(`Не найден main.py: ${MAIN_PY}`);
+        return checks;
+    }
+
+    try {
+        const { code, stderr } = await runPython([
+            '-c',
+            "import whisper; import ffmpeg; print('ok')",
+        ]);
+        checks.python = code === 0;
+        checks.whisper = checks.python;
+        checks.ffmpeg = checks.python;
+        if (!checks.python) {
+            checks.messages.push(stderr.trim() || 'Установите: pip install -r requirements.txt');
         }
+    } catch (e) {
+        checks.messages.push(String(e.message || e));
+    }
 
-        console.log('Запуск транскрибации:', args);
+    return checks;
+});
 
-        const python = spawn('python', args, {
-            cwd: path.join(__dirname, '..', '..')
-        });
+ipcMain.handle('transcribe', async (event, { filePath, model, language, convert }) => {
+    if (!fs.existsSync(MAIN_PY)) {
+        throw new Error(`Не найден Python-бэкенд: ${MAIN_PY}`);
+    }
 
-        let output = '';
-        let error = '';
+    const args = [MAIN_PY, filePath, '-m', model, '--json-stdout'];
 
-        python.stdout.on('data', (data) => {
-            output += data.toString();
-        });
+    if (language && language !== 'auto') {
+        args.push('-l', language);
+    }
 
-        python.stderr.on('data', (data) => {
-            error += data.toString();
-        });
+    if (convert) {
+        args.push('--convert');
+    }
 
-        python.on('close', (code) => {
-            if (code !== 0) {
-                console.error('Python error:', error);
-                reject(new Error(error || 'Ошибка транскрибации'));
-                return;
-            }
+    const sendLog = (line) => {
+        if (mainWindow && !mainWindow.isDestroyed()) {
+            mainWindow.webContents.send('transcribe-log', line);
+        }
+    };
 
-            try {
-                // Парсим JSON из вывода
-                const lines = output.trim().split('\n');
-                const jsonLine = lines.find(line => line.trim().startsWith('{'));
-                
-                if (jsonLine) {
-                    const result = JSON.parse(jsonLine);
-                    resolve(result);
-                } else {
-                    // Если нет JSON, возвращаем текст
-                    resolve({
-                        text: output,
-                        segments: [],
-                        language: 'unknown'
-                    });
-                }
-            } catch (e) {
-                console.error('Parse error:', e, output);
-                resolve({
-                    text: output,
-                    segments: [],
-                    language: 'unknown'
-                });
-            }
-        });
-    });
+    console.log('Запуск транскрибации:', args.join(' '));
+
+    const { code, stdout, stderr, command } = await runPython(args, sendLog);
+
+    if (code !== 0) {
+        const detail = (stderr || stdout).trim();
+        throw new Error(detail || `Python завершился с кодом ${code} (${command})`);
+    }
+
+    try {
+        return parseTranscribJson(stdout);
+    } catch (e) {
+        console.error('Parse error:', e.message, stdout.slice(-500));
+        throw new Error('Ошибка разбора результата: ' + e.message);
+    }
 });

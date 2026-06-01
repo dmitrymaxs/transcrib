@@ -1,16 +1,21 @@
 # Transcrib Electron
 
-Audio transcription / Транскрибация аудио
-
-Версия приложения Transcrib на Electron (JavaScript/TypeScript)
+Десктоп-оболочка для Python-проекта [Transcrib](../) (Whisper + FFmpeg).
 
 ## Требования
 
 - Node.js 18+
-- npm или yarn
-- FFmpeg (для обработки аудио)
+- Python 3.8+ с зависимостями из `../requirements.txt` (корень Transcrib)
+- FFmpeg в PATH
 
-## Установка
+Установка Python-зависимостей (из корня Transcrib):
+
+```bash
+cd ..
+pip install -r requirements.txt
+```
+
+## Установка Electron
 
 ```bash
 cd transcrib-electron
@@ -23,28 +28,33 @@ npm install
 npm start
 ```
 
+Приложение вызывает `../main.py` с флагом `--json-stdout` и не создаёт лишних файлов на диске до ручного сохранения.
+
 ## Сборка
 
 ```bash
 npm run build
 ```
 
-## Структура проекта
+## Структура
 
 ```text
-transcrib-electron/
-├── package.json      # Зависимости и скрипты
-├── src/
-│   ├── main.js      # Главный процесс Electron
-│   ├── index.html   # Интерфейс пользователя
-│   └── renderer.js  # Логика рендерера
-└── dist/            # Скомпилированное приложение
+Transcrib/
+├── main.py              # CLI и бэкенд для Electron
+├── config.py            # Модели, языки, форматы
+├── transcrib_app.py     # Tkinter GUI (эталон функций)
+└── transcrib-electron/
+    └── src/
+        ├── main.js      # Electron + spawn Python
+        ├── renderer.js  # UI
+        └── index.html
 ```
 
 ## Функции
 
-- Выбор аудио/видео файла
-- Транскрибация с Whisper
-- Настройка модели и языка
-- Включение/отключение таймкодов
-- Сохранение в TXT, JSON, SRT, VTT
+- Те же модели Whisper: tiny … large
+- Языки из `config.py` (авто + ru, uk, en, …)
+- Конвертация аудио (`--convert`) для проблемных файлов
+- Вкладки: текст с таймкодами / список сегментов
+- Сохранение в один выбранный формат: TXT, JSON, SRT, VTT
+- Лог процесса Python в панели приложения

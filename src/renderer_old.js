@@ -4,9 +4,6 @@ const { ipcRenderer } = require('electron');
 let segments = [];
 let detectedLanguage = '';
 let currentFilePath = '';
-let currentTab = 'text';
-let lastWhisperResult = null;
-let isTranscribing = false;
 
 // ===== Управление темой =====
 let isDarkTheme = true;
@@ -46,41 +43,6 @@ function applyTheme(dark) {
     }
 })();
 
-// Логи Python в реальном времени
-ipcRenderer.on('transcribe-log', (event, line) => {
-    log(line);
-});
-
-// Проверка Python-окружения при старте
-(async function checkEnvironment() {
-    try {
-        const env = await ipcRenderer.invoke('check-environment');
-        if (!env.mainPy) {
-            log('⚠️ Не найден main.py: ' + env.transcribRoot);
-            updateStatus('Нет Python-бэкенда');
-            return;
-        }
-        if (!env.python) {
-            log('⚠️ Python/Whisper: ' + (env.messages[0] || 'не настроен'));
-            log('💡 pip install -r requirements.txt в папке Transcrib');
-            updateStatus('Требуется настройка Python');
-        } else {
-            log('✅ Python и Whisper доступны');
-        }
-    } catch (e) {
-        log('⚠️ Проверка окружения: ' + e.message);
-    }
-})();
-
-function setTranscribeBusy(busy) {
-    isTranscribing = busy;
-    const btn = document.querySelector('button.primary');
-    if (btn) {
-        btn.disabled = busy;
-        btn.textContent = busy ? '⏳ Транскрибация...' : '🚀 Транскрибировать';
-    }
-}
-
 // Выбор файла
 async function selectFile() {
     const filePath = await ipcRenderer.invoke('select-file');
@@ -99,64 +61,64 @@ async function startTranscription() {
         return;
     }
 
-    if (isTranscribing) return;
-
     const model = document.getElementById('model').value;
     const language = document.getElementById('language').value;
-    const convert = document.getElementById('convertAudio').checked;
+    const timestamps = document.getElementById('timestamps').checked;
 
     log('Начало транскрибации...');
     log('Файл: ' + filePath.split(/[/\\]/).pop());
-    log('Модель: ' + model + ', Язык: ' + language + (convert ? ', конвертация' : ''));
-
-    setTranscribeBusy(true);
+    log('Модель: ' + model + ', Язык: ' + language);
+    
     updateStatus('Загрузка модели...');
-    showProgress(15);
+    showProgress(30);
 
     try {
         const result = await ipcRenderer.invoke('transcribe', {
             filePath,
             model,
             language: language === 'auto' ? null : language,
-            convert,
+            timestamps
         });
 
-        lastWhisperResult = result;
-        displayResult(result);
-        const segCount = (result.segments && result.segments.length) || 0;
-        log('Транскрибация завершена! Язык: ' + (result.language || 'unknown') + ', сегментов: ' + segCount);
+        displayResult(result, timestamps);
+        log('Транскрибация завершена! Язык: ' + (result.language || 'unknown'));
         updateStatus('Готово');
-        showProgress(100);
-        setTimeout(hideProgress, 400);
+        hideProgress();
+
     } catch (error) {
         log('Ошибка: ' + error.message);
-        updateStatus('Ошибка');
+        updateStatus('Ошибка: ' + error.message);
         hideProgress();
-    } finally {
-        setTranscribeBusy(false);
     }
 }
 
 // Отображение результата
-function displayResult(result) {
+function displayResult(result, timestamps) {
+    const resultText = document.getElementById('resultText');
+    
     // Сохраняем сегменты
     if (result.segments && result.segments.length > 0) {
         segments = result.segments;
     }
-
+    
     // Сохраняем язык
     if (result.language) {
         detectedLanguage = result.language;
     }
-
-    // Если сегментов нет — показываем сырой текст
-    if (segments.length === 0) {
-        document.getElementById('resultText').value = result.text || '';
-        return;
+    
+    const text = result.text || '';
+    
+    if (!timestamps || segments.length === 0) {
+        // Без таймкодов
+        resultText.value = text;
+    } else {
+        // С таймкодами
+        const lines = segments.map(seg => {
+            const time = formatTime(seg.start);
+            return `[${time}] ${seg.text}`;
+        });
+        resultText.value = lines.join('\n\n');
     }
-
-    // Рендерим по текущей активной вкладке
-    renderCurrentTab();
 }
 
 // Форматирование времени
@@ -186,13 +148,10 @@ function buildExportContent(format) {
         case 'txt':
             return plainText;
         case 'json':
-            if (lastWhisperResult) {
-                return JSON.stringify(lastWhisperResult, null, 2);
-            }
             return JSON.stringify({
                 language: detectedLanguage,
                 segments: segments,
-                text: plainText,
+                text: plainText
             }, null, 2);
         case 'srt':
             return generateSRT();
@@ -287,46 +246,16 @@ function clearAll() {
     segments = [];
     detectedLanguage = '';
     currentFilePath = '';
-    lastWhisperResult = null;
     log('Очищено');
     updateStatus('Готов к работе');
 }
 
 // Переключение вкладок
-function switchTab(tab, clickedBtn) {
-    currentTab = tab;
+function switchTab(tab) {
     const tabs = document.querySelectorAll('.tab');
     tabs.forEach(t => t.classList.remove('active'));
-    if (clickedBtn) clickedBtn.classList.add('active');
-    renderCurrentTab();
-}
-
-// Отрисовка содержимого текущей вкладки
-function renderCurrentTab() {
-    const resultText = document.getElementById('resultText');
-    const timestampsOn = document.getElementById('timestamps').checked;
-
-    if (currentTab === 'text') {
-        // Текст с таймкодами (или без, если нет сегментов)
-        if (segments.length > 0 && timestampsOn) {
-            const lines = segments.map(seg => `[${formatTime(seg.start)}] ${seg.text}`);
-            resultText.value = lines.join('\n\n');
-        } else {
-            resultText.value = segments.map(seg => seg.text.trim()).join('\n');
-        }
-    } else if (currentTab === 'segments') {
-        // Список сегментов с началом и концом
-        if (segments.length === 0) {
-            resultText.value = '(нет сегментов — запустите транскрибацию с включёнными таймкодами)';
-            return;
-        }
-        const lines = segments.map((seg, i) => {
-            const start = formatTime(seg.start);
-            const end   = formatTime(seg.end);
-            return `#${i + 1}  ${start} → ${end}\n${seg.text.trim()}`;
-        });
-        resultText.value = lines.join('\n\n');
-    }
+    event.target.classList.add('active');
+    log('Переключено на вкладку: ' + tab);
 }
 
 // Логирование
@@ -350,13 +279,3 @@ function showProgress(percent) {
 function hideProgress() {
     document.getElementById('progress').style.width = '0%';
 }
-
-// Перерисовка при смене режима таймкодов
-document.addEventListener('DOMContentLoaded', () => {
-    const timestampsEl = document.getElementById('timestamps');
-    if (timestampsEl) {
-        timestampsEl.addEventListener('change', () => {
-            if (segments.length > 0) renderCurrentTab();
-        });
-    }
-});
