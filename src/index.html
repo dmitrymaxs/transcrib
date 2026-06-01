@@ -1,0 +1,409 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Transcrib - Транскрибация аудио</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        /* ===== CSS-переменные: Тёмная тема (по умолчанию) ===== */
+        :root {
+            --bg-main: #1e1e2e;
+            --bg-panel: #181825;
+            --bg-input: #313244;
+            --bg-hover: #45475a;
+            --bg-status: #313244;
+            --border-color: #313244;
+            --border-input: #45475a;
+            --text-primary: #cdd6f4;
+            --text-secondary: #a6adc8;
+            --accent-color: #89b4fa;
+            --accent-hover: #b4befe;
+            --accent-text: #1e1e2e;
+            --progress-bg: #313244;
+            --progress-fill: #89b4fa;
+            --tab-active: #45475a;
+            --toggle-bg: #313244;
+            --toggle-border: #45475a;
+            --toggle-icon: '🌙';
+        }
+
+        /* ===== Светлая тема ===== */
+        :root.light-theme {
+            --bg-main: #eff1f5;
+            --bg-panel: #e6e9ef;
+            --bg-input: #dce0e8;
+            --bg-hover: #ccd0da;
+            --bg-status: #dce0e8;
+            --border-color: #ccd0da;
+            --border-input: #bcc0cc;
+            --text-primary: #4c4f69;
+            --text-secondary: #6c6f85;
+            --accent-color: #1e66f5;
+            --accent-hover: #04a5e5;
+            --accent-text: #ffffff;
+            --progress-bg: #ccd0da;
+            --progress-fill: #1e66f5;
+            --tab-active: #ccd0da;
+            --toggle-bg: #dce0e8;
+            --toggle-border: #bcc0cc;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: var(--bg-main);
+            color: var(--text-primary);
+            height: 100vh;
+            overflow: hidden;
+            transition: background-color 0.3s, color 0.3s;
+        }
+
+        .container {
+            display: flex;
+            height: 100vh;
+        }
+
+        /* Левая панель - настройки */
+        .left-panel {
+            width: 300px;
+            background-color: var(--bg-panel);
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            border-right: 1px solid var(--border-color);
+            transition: background-color 0.3s, border-color 0.3s;
+        }
+
+        /* Заголовок + переключатель темы */
+        .title-row {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 20px;
+        }
+
+        .title {
+            font-size: 22px;
+            font-weight: bold;
+            color: var(--accent-color);
+            transition: color 0.3s;
+        }
+
+        /* Кнопка переключения темы */
+        .theme-toggle {
+            background: var(--toggle-bg);
+            border: 1px solid var(--toggle-border);
+            border-radius: 20px;
+            padding: 4px 10px;
+            cursor: pointer;
+            font-size: 16px;
+            color: var(--text-primary);
+            transition: background-color 0.3s, border-color 0.3s;
+            display: flex;
+            align-items: center;
+            gap: 4px;
+            white-space: nowrap;
+        }
+
+        .theme-toggle:hover {
+            background: var(--bg-hover);
+        }
+
+        .section-title {
+            font-size: 14px;
+            font-weight: bold;
+            margin-top: 15px;
+            margin-bottom: 10px;
+            color: var(--text-primary);
+            transition: color 0.3s;
+        }
+
+        .file-input-group {
+            display: flex;
+            gap: 5px;
+            margin-bottom: 10px;
+        }
+
+        input[type="text"] {
+            flex: 1;
+            padding: 8px;
+            background-color: var(--bg-input);
+            border: 1px solid var(--border-input);
+            color: var(--text-primary);
+            border-radius: 4px;
+            transition: background-color 0.3s, border-color 0.3s, color 0.3s;
+        }
+
+        button {
+            padding: 8px 16px;
+            background-color: var(--bg-input);
+            color: var(--text-primary);
+            border: 1px solid var(--border-input);
+            border-radius: 4px;
+            cursor: pointer;
+            transition: background-color 0.2s, color 0.3s, border-color 0.3s;
+        }
+
+        button:hover {
+            background-color: var(--bg-hover);
+        }
+
+        button.primary {
+            background-color: var(--accent-color);
+            color: var(--accent-text);
+            font-weight: bold;
+            margin-top: 20px;
+            transition: background-color 0.2s;
+        }
+
+        button.primary:hover {
+            background-color: var(--accent-hover);
+        }
+
+        select {
+            width: 100%;
+            padding: 8px;
+            background-color: var(--bg-input);
+            border: 1px solid var(--border-input);
+            color: var(--text-primary);
+            border-radius: 4px;
+            margin-bottom: 10px;
+            transition: background-color 0.3s, border-color 0.3s, color 0.3s;
+        }
+
+        .checkbox-group {
+            margin: 10px 0;
+        }
+
+        .checkbox-group label {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            cursor: pointer;
+            margin-bottom: 8px;
+        }
+
+        .checkbox-group input[type="checkbox"] {
+            accent-color: var(--accent-color);
+        }
+
+        /* Правая панель - результат */
+        .right-panel {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            padding: 20px;
+            background-color: var(--bg-main);
+            transition: background-color 0.3s;
+        }
+
+        .tabs {
+            display: flex;
+            gap: 5px;
+            margin-bottom: 10px;
+        }
+
+        .tab {
+            padding: 10px 20px;
+            background-color: var(--bg-input);
+            color: var(--text-primary);
+            border: none;
+            border-radius: 4px 4px 0 0;
+            cursor: pointer;
+            transition: background-color 0.3s, color 0.3s;
+        }
+
+        .tab.active {
+            background-color: var(--tab-active);
+        }
+
+        .content-area {
+            flex: 1;
+            background-color: var(--bg-panel);
+            border-radius: 0 4px 4px 4px;
+            padding: 15px;
+            overflow: auto;
+            transition: background-color 0.3s;
+        }
+
+        textarea {
+            width: 100%;
+            height: 100%;
+            background-color: var(--bg-panel);
+            color: var(--text-primary);
+            border: none;
+            resize: none;
+            font-family: 'Consolas', monospace;
+            font-size: 14px;
+            line-height: 1.6;
+            transition: background-color 0.3s, color 0.3s;
+        }
+
+        textarea:focus {
+            outline: none;
+        }
+
+        /* Нижняя панель */
+        .bottom-panel {
+            margin-top: 10px;
+        }
+
+        .save-buttons {
+            display: flex;
+            gap: 5px;
+            align-items: center;
+        }
+
+        .save-buttons span {
+            color: var(--text-secondary);
+            transition: color 0.3s;
+        }
+
+        .save-buttons button {
+            padding: 5px 15px;
+        }
+
+        .status-bar {
+            margin-top: 10px;
+            padding: 8px;
+            background-color: var(--bg-status);
+            border-radius: 4px;
+            font-size: 12px;
+            color: var(--text-primary);
+            transition: background-color 0.3s, color 0.3s;
+        }
+
+        .log-area {
+            margin-top: 10px;
+            height: 80px;
+            background-color: var(--bg-panel);
+            border: 1px solid var(--border-color);
+            border-radius: 4px;
+            padding: 8px;
+            overflow: auto;
+            font-family: 'Consolas', monospace;
+            font-size: 11px;
+            color: var(--text-secondary);
+            transition: background-color 0.3s, border-color 0.3s, color 0.3s;
+        }
+
+        .progress-bar {
+            width: 100%;
+            height: 4px;
+            background-color: var(--progress-bg);
+            border-radius: 2px;
+            margin-top: 10px;
+            overflow: hidden;
+            transition: background-color 0.3s;
+        }
+
+        .progress-fill {
+            height: 100%;
+            background-color: var(--progress-fill);
+            width: 0%;
+            transition: width 0.3s, background-color 0.3s;
+        }
+
+        label {
+            color: var(--text-secondary);
+            font-size: 13px;
+            display: block;
+            margin-bottom: 4px;
+            margin-top: 8px;
+            transition: color 0.3s;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <!-- Левая панель -->
+        <div class="left-panel">
+            <div class="title-row">
+                <div class="title">🎤 Transcrib</div>
+                <button class="theme-toggle" id="themeToggle" onclick="toggleTheme()" title="Переключить тему">
+                    <span id="themeIcon">🌙</span>
+                    <span id="themeLabel">Тёмная</span>
+                </button>
+            </div>
+            
+            <div class="section-title">📁 Выбор файла</div>
+            <div class="file-input-group">
+                <input type="text" id="filePath" readonly placeholder="Выберите файл...">
+                <button onclick="selectFile()">📂</button>
+            </div>
+            
+            <div class="section-title">⚙️ Настройки</div>
+            
+            <label>Модель:</label>
+            <select id="model">
+                <option value="tiny">tiny</option>
+                <option value="base" selected>base</option>
+                <option value="small">small</option>
+                <option value="medium">medium</option>
+                <option value="large">large</option>
+            </select>
+            
+            <label>Язык:</label>
+            <select id="language">
+                <option value="auto" selected>Автоопределение</option>
+                <option value="ru">Русский</option>
+                <option value="en">English</option>
+                <option value="de">Deutsch</option>
+                <option value="fr">Français</option>
+                <option value="es">Español</option>
+            </select>
+            
+            <div class="checkbox-group">
+                <label>
+                    <input type="checkbox" id="convertAudio">
+                    Конвертировать аудио
+                </label>
+                <label>
+                    <input type="checkbox" id="timestamps" checked>
+                    Включить таймкоды
+                </label>
+            </div>
+            
+            <button class="primary" onclick="startTranscription()">🚀 Транскрибировать</button>
+            <button onclick="clearAll()">📋 Очистить</button>
+            
+            <div class="status-bar" id="status">Готов к работе</div>
+        </div>
+        
+        <!-- Правая панель -->
+        <div class="right-panel">
+            <div class="tabs">
+                <button class="tab active" onclick="switchTab('text')">📝 Текст с таймкодами</button>
+                <button class="tab" onclick="switchTab('segments')">📋 Сегменты</button>
+            </div>
+            
+            <div class="content-area">
+                <textarea id="resultText" placeholder="Результат транскрибации появится здесь..."></textarea>
+            </div>
+            
+            <div class="bottom-panel">
+                <div class="save-buttons">
+                    <span>Сохранить:</span>
+                    <button onclick="saveFile('txt')">TXT</button>
+                    <button onclick="saveFile('json')">JSON</button>
+                    <button onclick="saveFile('srt')">SRT</button>
+                    <button onclick="saveFile('vtt')">VTT</button>
+                </div>
+                
+                <div class="progress-bar">
+                    <div class="progress-fill" id="progress"></div>
+                </div>
+                
+                <div class="log-area" id="log"></div>
+            </div>
+        </div>
+    </div>
+
+    <script src="renderer.js"></script>
+</body>
+</html>
