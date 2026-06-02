@@ -9,3 +9,6 @@ yarn-debug.log*
 yarn-error.log*
 .DS_Store
 Thumbs.db
+
+# Лицензирование (секрет активации — только локально)
+src/license.js

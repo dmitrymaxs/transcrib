@@ -1,0 +1,65 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" role="img" aria-labelledby="title desc">
+  <title id="title">Transcrib app icon</title>
+  <desc id="desc">A rounded app icon showing an audio waveform transforming into text lines.</desc>
+  <defs>
+    <linearGradient id="bg" x1="128" y1="96" x2="896" y2="928" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#0f766e"/>
+      <stop offset="0.5" stop-color="#2563eb"/>
+      <stop offset="1" stop-color="#111827"/>
+    </linearGradient>
+    <radialGradient id="glowA" cx="29%" cy="24%" r="52%">
+      <stop offset="0" stop-color="#67e8f9" stop-opacity="0.55"/>
+      <stop offset="1" stop-color="#67e8f9" stop-opacity="0"/>
+    </radialGradient>
+    <radialGradient id="glowB" cx="76%" cy="76%" r="48%">
+      <stop offset="0" stop-color="#a7f3d0" stop-opacity="0.32"/>
+      <stop offset="1" stop-color="#a7f3d0" stop-opacity="0"/>
+    </radialGradient>
+    <filter id="softShadow" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="24" stdDeviation="28" flood-color="#020617" flood-opacity="0.35"/>
+    </filter>
+    <linearGradient id="mark" x1="222" y1="286" x2="814" y2="720" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#ecfeff"/>
+      <stop offset="0.55" stop-color="#d1fae5"/>
+      <stop offset="1" stop-color="#bfdbfe"/>
+    </linearGradient>
+    <linearGradient id="accent" x1="244" y1="512" x2="786" y2="512" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#5eead4"/>
+      <stop offset="1" stop-color="#93c5fd"/>
+    </linearGradient>
+  </defs>
+
+  <rect width="1024" height="1024" rx="224" fill="url(#bg)"/>
+  <rect width="1024" height="1024" rx="224" fill="url(#glowA)"/>
+  <rect width="1024" height="1024" rx="224" fill="url(#glowB)"/>
+
+  <g filter="url(#softShadow)">
+    <rect x="164" y="192" width="696" height="640" rx="116" fill="#ffffff" opacity="0.13"/>
+    <rect x="205" y="232" width="614" height="560" rx="88" fill="#020617" opacity="0.18"/>
+  </g>
+
+  <g fill="none" stroke-linecap="round" stroke-linejoin="round">
+    <path
+      d="M238 520h52c18 0 28-14 34-50l20-122c4-28 42-29 47-1l46 314c5 31 48 31 53 0l34-211c5-31 47-32 53-1l20 99c5 26 21 40 45 40h44"
+      stroke="url(#mark)"
+      stroke-width="54"/>
+    <path
+      d="M238 520h52c18 0 28-14 34-50l20-122c4-28 42-29 47-1l46 314c5 31 48 31 53 0l34-211c5-31 47-32 53-1l20 99c5 26 21 40 45 40h44"
+      stroke="url(#accent)"
+      stroke-width="28"
+      opacity="0.9"/>
+  </g>
+
+  <g fill="#f8fafc">
+    <rect x="642" y="344" width="170" height="44" rx="22" opacity="0.96"/>
+    <rect x="642" y="448" width="214" height="44" rx="22" opacity="0.86"/>
+    <rect x="642" y="552" width="150" height="44" rx="22" opacity="0.72"/>
+    <rect x="642" y="656" width="202" height="44" rx="22" opacity="0.56"/>
+  </g>
+
+  <g fill="#ffffff" opacity="0.92">
+    <circle cx="266" cy="286" r="16"/>
+    <circle cx="310" cy="286" r="16" opacity="0.62"/>
+    <circle cx="354" cy="286" r="16" opacity="0.38"/>
+  </g>
+</svg>

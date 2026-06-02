@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Transcrib - Транскрибация аудио</title>
+    <link rel="icon" type="image/png" href="../transcrib-icon-256.png">
     <style>
         * {
             margin: 0;
@@ -317,9 +318,97 @@
             margin-top: 8px;
             transition: color 0.3s;
         }
+
+        body.app-locked .container {
+            pointer-events: none;
+            user-select: none;
+            filter: blur(2px);
+        }
+
+        .license-overlay {
+            position: fixed;
+            inset: 0;
+            z-index: 1000;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: rgba(0, 0, 0, 0.65);
+            padding: 20px;
+        }
+
+        .license-overlay.hidden {
+            display: none;
+        }
+
+        .license-modal {
+            pointer-events: auto;
+            width: 100%;
+            max-width: 440px;
+            background: var(--bg-panel);
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            padding: 24px;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+        }
+
+        .license-modal p {
+            line-height: 1.5;
+            margin-bottom: 16px;
+            color: var(--text-primary);
+        }
+
+        .license-device-id {
+            font-size: 12px;
+            color: var(--text-secondary);
+            word-break: break-all;
+            margin-bottom: 16px;
+        }
+
+        .license-device-id code {
+            color: var(--accent-color);
+            font-family: 'Consolas', monospace;
+        }
+
+        .license-modal input[type="text"] {
+            width: 100%;
+            margin-bottom: 16px;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+
+        .license-actions {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+        }
+
+        .license-actions button {
+            flex: 1;
+            min-width: 140px;
+        }
+
+        .license-error {
+            margin-top: 12px;
+            font-size: 13px;
+            color: #f38ba8;
+            min-height: 1.2em;
+        }
     </style>
 </head>
 <body>
+    <div id="licenseOverlay" class="license-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="licenseTitle">
+        <div class="license-modal">
+            <p id="licenseTitle">Бесплатный период работы программы закончился. Для продолжения работы запросите код для разблокировки</p>
+            <p class="license-device-id">ID устройства: <code id="deviceIdDisplay">—</code></p>
+            <input type="text" id="activationCodeInput" placeholder="Код разблокировки" autocomplete="off" spellcheck="false">
+            <div class="license-actions">
+                <button type="button" id="requestCodeBtn">Запросить код</button>
+                <button type="button" class="primary" id="activateBtn">Активировать</button>
+            </div>
+            <p class="license-error" id="activationError" aria-live="polite"></p>
+        </div>
+    </div>
+
     <div class="container">
         <!-- Левая панель -->
         <div class="left-panel">

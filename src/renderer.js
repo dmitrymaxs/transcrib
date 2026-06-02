@@ -1,5 +1,7 @@
 const { ipcRenderer } = require('electron');
 
+let appLicensed = true;
+
 // Глобальные переменные
 let segments = [];
 let detectedLanguage = '';
@@ -51,6 +53,88 @@ ipcRenderer.on('transcribe-log', (event, line) => {
     log(line);
 });
 
+function setAppLocked(locked) {
+    document.body.classList.toggle('app-locked', locked);
+    const overlay = document.getElementById('licenseOverlay');
+    if (overlay) {
+        overlay.classList.toggle('hidden', !locked);
+    }
+}
+
+function showActivationError(message) {
+    const el = document.getElementById('activationError');
+    if (el) el.textContent = message || '';
+}
+
+async function requestActivationCode() {
+    try {
+        await ipcRenderer.invoke('license-open-telegram');
+        log('Открыт Telegram для запроса кода активации');
+    } catch (e) {
+        showActivationError('Не удалось открыть Telegram: ' + e.message);
+    }
+}
+
+async function submitActivationCode() {
+    const input = document.getElementById('activationCodeInput');
+    const code = input ? input.value : '';
+    showActivationError('');
+
+    const result = await ipcRenderer.invoke('license-activate', code);
+    if (!result.ok) {
+        showActivationError(result.error || 'Ошибка активации');
+        return;
+    }
+
+    appLicensed = true;
+    if (input) input.value = '';
+    setAppLocked(false);
+    log('✅ Программа активирована');
+    updateStatus('Активировано — готов к работе');
+}
+
+async function initLicense() {
+    const status = await ipcRenderer.invoke('license-status');
+    appLicensed = status.licensed;
+
+    const deviceEl = document.getElementById('deviceIdDisplay');
+    if (deviceEl) deviceEl.textContent = status.deviceId;
+
+    if (!status.licensed && status.trialExpired) {
+        setAppLocked(true);
+        updateStatus('Требуется активация');
+        log('Бесплатный период (' + status.trialDays + ' дн.) закончился');
+        return;
+    }
+
+    setAppLocked(false);
+
+    if (!status.activated && !status.trialExpired) {
+        log('Бесплатный период: осталось ' + status.daysRemaining + ' дн.');
+    }
+
+    if (status.showTrialWarning && status.warningMessage) {
+        log(status.warningMessage);
+    }
+}
+
+// Проверка лицензии и окружения при старте
+(async function startupChecks() {
+    await initLicense();
+
+    const requestBtn = document.getElementById('requestCodeBtn');
+    const activateBtn = document.getElementById('activateBtn');
+    const codeInput = document.getElementById('activationCodeInput');
+
+    if (requestBtn) requestBtn.addEventListener('click', requestActivationCode);
+    if (activateBtn) activateBtn.addEventListener('click', submitActivationCode);
+    if (codeInput) {
+        codeInput.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') submitActivationCode();
+        });
+    }
+})();
+
 // Проверка Python-окружения при старте
 (async function checkEnvironment() {
     try {
@@ -83,16 +167,25 @@ function setTranscribeBusy(busy) {
 
 // Выбор файла
 async function selectFile() {
-    const filePath = await ipcRenderer.invoke('select-file');
-    if (filePath) {
-        document.getElementById('filePath').value = filePath;
-        currentFilePath = filePath;
-        log('Выбран файл: ' + filePath.split(/[/\\]/).pop());
+    if (!appLicensed) return;
+    try {
+        const filePath = await ipcRenderer.invoke('select-file');
+        if (filePath) {
+            document.getElementById('filePath').value = filePath;
+            currentFilePath = filePath;
+            log('Выбран файл: ' + filePath.split(/[/\\]/).pop());
+        }
+    } catch (e) {
+        if (e.message === 'LICENSE_REQUIRED') {
+            await initLicense();
+            log('Требуется код активации');
+        }
     }
 }
 
 // Запуск транскрибации
 async function startTranscription() {
+    if (!appLicensed) return;
     const filePath = document.getElementById('filePath').value;
     if (!filePath) {
         alert('Выберите файл для транскрибации');
@@ -129,8 +222,14 @@ async function startTranscription() {
         showProgress(100);
         setTimeout(hideProgress, 400);
     } catch (error) {
-        log('Ошибка: ' + error.message);
-        updateStatus('Ошибка');
+        if (error.message === 'LICENSE_REQUIRED') {
+            await initLicense();
+            log('Требуется код активации');
+            updateStatus('Требуется активация');
+        } else {
+            log('Ошибка: ' + error.message);
+            updateStatus('Ошибка');
+        }
         hideProgress();
     } finally {
         setTranscribeBusy(false);
@@ -205,6 +304,7 @@ function buildExportContent(format) {
 
 // Сохранение файла
 async function saveFile(format) {
+    if (!appLicensed) return;
     if (!hasExportableData()) {
         alert('Нет данных для сохранения');
         return;
@@ -226,16 +326,25 @@ async function saveFile(format) {
         ? currentFilePath.split(/[/\\]/).pop().replace(/\.[^.]+$/, '') + ext
         : 'transcription' + ext;
 
-    const result = await ipcRenderer.invoke('save-export', {
-        defaultName,
-        format,
-        content
-    });
+    try {
+        const result = await ipcRenderer.invoke('save-export', {
+            defaultName,
+            format,
+            content
+        });
 
-    if (result.ok) {
-        log('Сохранено (' + format.toUpperCase() + '): ' + result.filePath);
-    } else if (result.error) {
-        log('Ошибка сохранения: ' + result.error);
+        if (result.ok) {
+            log('Сохранено (' + format.toUpperCase() + '): ' + result.filePath);
+        } else if (result.error) {
+            log('Ошибка сохранения: ' + result.error);
+        }
+    } catch (e) {
+        if (e.message === 'LICENSE_REQUIRED') {
+            await initLicense();
+            log('Требуется код активации');
+        } else {
+            log('Ошибка сохранения: ' + e.message);
+        }
     }
 }
 

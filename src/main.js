@@ -1,7 +1,18 @@
-const { app, BrowserWindow, ipcMain, dialog } = require('electron');
+const { app, BrowserWindow, ipcMain, dialog, shell, Menu } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const { spawn } = require('child_process');
+const license = require('./license');
+
+const APP_ROOT = path.join(__dirname, '..');
+
+function getAppIconPath() {
+    const ico = path.join(APP_ROOT, 'transcrib-icon.ico');
+    const png = path.join(APP_ROOT, 'transcrib-icon-256.png');
+    if (process.platform === 'win32' && fs.existsSync(ico)) return ico;
+    if (fs.existsSync(png)) return png;
+    return undefined;
+}
 
 /** Корень Python-проекта Transcrib (родитель transcrib-electron) */
 const TRANSCRIB_ROOT = path.join(__dirname, '..', '..');
@@ -100,6 +111,18 @@ function parseTranscribJson(stdout) {
 }
 
 let mainWindow;
+const PROGRAM_SITE_URL = 'https://xn----7sbbimud6a4an4b5dh.org/transcrib/';
+const LICENSE_PATH = path.join(APP_ROOT, 'LICENSE');
+
+function getUserDataPath() {
+    return app.getPath('userData');
+}
+
+function assertLicensed() {
+    if (!license.isAppLicensed(getUserDataPath())) {
+        throw new Error('LICENSE_REQUIRED');
+    }
+}
 
 function createWindow() {
     mainWindow = new BrowserWindow({
@@ -107,6 +130,7 @@ function createWindow() {
         height: 700,
         minWidth: 800,
         minHeight: 600,
+        icon: getAppIconPath(),
         webPreferences: {
             nodeIntegration: true,
             contextIsolation: false,
@@ -126,7 +150,70 @@ function createWindow() {
     });
 }
 
+async function showLicenseDialog() {
+    const result = await dialog.showMessageBox(mainWindow, {
+        type: 'info',
+        title: 'Лицензия',
+        message: 'Transcrib Electron распространяется по Business Source License 1.1',
+        detail: [
+            'Правообладатель: Dmitry Maksimov',
+            'Change Date: January 1, 2030',
+            'Change License: Apache License, Version 2.0',
+        ].join('\n'),
+        buttons: ['Закрыть', 'Открыть LICENSE'],
+        defaultId: 0,
+        cancelId: 0,
+    });
+
+    if (result.response === 1) {
+        await shell.openPath(LICENSE_PATH);
+    }
+}
+
+function createAppMenu() {
+    const template = [
+        {
+            label: 'Файл',
+            submenu: [{ role: 'quit', label: 'Выход' }],
+        },
+        {
+            label: 'Вид',
+            submenu: [
+                { role: 'reload', label: 'Обновить' },
+                { role: 'forceReload', label: 'Принудительно обновить' },
+                { role: 'toggleDevTools', label: 'Инструменты разработчика' },
+                { type: 'separator' },
+                { role: 'resetZoom', label: 'Сбросить масштаб' },
+                { role: 'zoomIn', label: 'Увеличить масштаб' },
+                { role: 'zoomOut', label: 'Уменьшить масштаб' },
+                { type: 'separator' },
+                { role: 'togglefullscreen', label: 'Полноэкранный режим' },
+            ],
+        },
+        {
+            label: 'Помощь',
+            submenu: [
+                {
+                    label: 'Лицензия',
+                    click: showLicenseDialog,
+                },
+                { type: 'separator' },
+                {
+                    label: 'Сайт программы',
+                    click: async () => {
+                        await shell.openExternal(PROGRAM_SITE_URL);
+                    },
+                },
+            ],
+        },
+    ];
+
+    const menu = Menu.buildFromTemplate(template);
+    Menu.setApplicationMenu(menu);
+}
+
 app.whenReady().then(() => {
+    createAppMenu();
     createWindow();
 
     app.on('activate', () => {
@@ -142,7 +229,21 @@ app.on('window-all-closed', () => {
     }
 });
 
+ipcMain.handle('license-status', () => license.getLicenseStatus(getUserDataPath()));
+
+ipcMain.handle('license-activate', (event, code) =>
+    license.activateWithCode(getUserDataPath(), code)
+);
+
+ipcMain.handle('license-open-telegram', async () => {
+    const { deviceId } = license.getLicenseStatus(getUserDataPath());
+    const url = license.buildTelegramRequestUrl(deviceId);
+    await shell.openExternal(url);
+    return { ok: true };
+});
+
 ipcMain.handle('select-file', async () => {
+    assertLicensed();
     const result = await dialog.showOpenDialog(mainWindow, {
         properties: ['openFile'],
         filters: [
@@ -157,6 +258,7 @@ ipcMain.handle('select-file', async () => {
 });
 
 ipcMain.handle('save-export', async (event, { defaultName, format, content }) => {
+    assertLicensed();
     const config = EXPORT_FORMATS[format];
     if (!config) {
         return { ok: false, error: 'Неподдерживаемый формат' };
@@ -210,6 +312,7 @@ ipcMain.handle('check-environment', async () => {
 });
 
 ipcMain.handle('transcribe', async (event, { filePath, model, language, convert }) => {
+    assertLicensed();
     if (!fs.existsSync(MAIN_PY)) {
         throw new Error(`Не найден Python-бэкенд: ${MAIN_PY}`);
     }

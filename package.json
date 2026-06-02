@@ -5,26 +5,33 @@
   "main": "src/main.js",
   "scripts": {
     "start": "electron .",
-    "build": "electron-builder"
+    "icons": "node scripts/generate-icon.js",
+    "prebuild": "npm run icons",
+    "build": "electron-builder",
+    "activation-code": "node scripts/generate-activation-code.js"
   },
-  "author": "",
-  "license": "MIT",
+  "author": "Dmitry Maksimov",
+  "license": "BUSL-1.1",
   "devDependencies": {
     "electron": "^28.0.0",
-    "electron-builder": "^24.9.1"
+    "electron-builder": "^24.9.1",
+    "png-to-ico": "^2.1.8"
   },
   "dependencies": {
-    "whisper-node": "^1.0.0",
     "ffmpeg-static": "^5.2.0",
-    "fluent-ffmpeg": "^2.1.2"
+    "fluent-ffmpeg": "^2.1.2",
+    "whisper-node": "^1.0.0"
   },
   "build": {
     "appId": "com.transcrib.app",
+    "productName": "Transcrib",
+    "icon": "transcrib-icon.ico",
     "directories": {
       "output": "dist"
     },
     "win": {
-      "target": "nsis"
+      "target": "nsis",
+      "icon": "transcrib-icon.ico"
     }
   }
 }
