@@ -12,3 +12,4 @@ Thumbs.db
 
 # Лицензирование (секрет активации — только локально)
 src/license.js
+src/filesarchives.zip
